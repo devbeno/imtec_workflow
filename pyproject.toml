@@ -2,7 +2,7 @@
 name = "imtec_workflow"
 version = "0.1.0"
 description = "A dynamic workflow for managing Frappe installations and ORB machines."
-authors = ["Your Name <benjamin.peltop@imtec.ba>"]
+authors = ["Benjamin Pelto <benjamin.peltop@imtec.ba>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
