@@ -1,22 +1,38 @@
-from invoke import task, Program, Collection
 import os
 import subprocess
 import time
 
+from invoke import Collection, Program, task
+
 # Define the collection object for tasks
 namespace = Collection()
 
-def stream_logs(machine_name, delay=2):
+
+def stream_logs(machine_name, delay=2, max_iterations=None):
     """
     Stream logs from the ORB machine while a process is running.
+
+    Args:
+        machine_name (str): Name of the machine to stream logs from.
+        delay (int): Time delay between log retrievals.
+        max_iterations (int): For testing, limits the number of iterations. Defaults to None (infinite loop).
     """
     print(f"Streaming logs from machine: {machine_name}")
+    iteration = 0
     while True:
         try:
             subprocess.run(f"orb logs {machine_name} --all", shell=True, check=True)
-            time.sleep(delay)
         except subprocess.CalledProcessError:
+            print("Error retrieving logs. Exiting...")
             break
+        time.sleep(delay)
+
+        # For testing, stop after a certain number of iterations
+        if max_iterations is not None:
+            iteration += 1
+            if iteration >= max_iterations:
+                break
+
 
 def run_command(command):
     try:
@@ -27,21 +43,32 @@ def run_command(command):
         print(f"Error: Command '{e.cmd}' failed with return code {e.returncode}")
         raise
 
+
 def run_command_output(command):
     """
     Run a shell command and return its output as a list of lines.
     """
     try:
         print(f"Running command: {command}")
-        result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return result.stdout.decode('utf-8').splitlines()
+        result = subprocess.run(
+            command,
+            shell=True,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        return result.stdout.decode("utf-8").splitlines()
     except subprocess.CalledProcessError as e:
         print(f"Error running command: {e}")
         return []
 
-WORKBASE = os.environ.get('WORKBASE')
+
+WORKBASE = os.environ.get("WORKBASE")
 if not WORKBASE:
-    raise EnvironmentError("WORKBASE is not set in your environment. Please ensure it's defined in your profile.")
+    raise EnvironmentError(
+        "WORKBASE is not set in your environment. Please ensure it's defined in your profile."
+    )
+
 
 def load_env(machine_name):
     env_file = f"{WORKBASE}/{machine_name}/.env"
@@ -56,6 +83,7 @@ def load_env(machine_name):
     else:
         raise FileNotFoundError(f"Environment file {env_file} not found.")
 
+
 @task
 def generate_env(c):
     """
@@ -67,6 +95,7 @@ def generate_env(c):
     else:
         print(f"Error: {script_path} not found.")
 
+
 @task
 def build(c):
     """
@@ -77,10 +106,10 @@ def build(c):
     generate_env(c)
     load_env(machine_name)
 
-    distro = os.environ.get('DISTRO', 'ubuntu')
-    version = os.environ.get('VERSION', 'jammy')
-    arch = os.environ.get('ARCH', 'amd64')
-    frappe_user = os.environ.get('FRAPPE_USER', 'frappe')
+    distro = os.environ.get("DISTRO", "ubuntu")
+    version = os.environ.get("VERSION", "jammy")
+    arch = os.environ.get("ARCH", "amd64")
+    frappe_user = os.environ.get("FRAPPE_USER", "frappe")
 
     create_command = f"orb create -a {arch} {distro}:{version} {machine_name} -u {frappe_user}"
     print(f"Running command: {create_command}")
@@ -99,6 +128,7 @@ def build(c):
     stream_logs(machine_name)
     setup_process.wait()
 
+
 @task
 def destroy(c):
     """
@@ -112,7 +142,7 @@ def destroy(c):
     try:
         run_command(f"orb delete {machine_name} --force")
     except subprocess.CalledProcessError as e:
-        if 'machine not found' in str(e):
+        if "machine not found" in str(e):
             print(f"Machine '{machine_name}' not found, proceeding to remove the project directory.")
         else:
             print(f"Error deleting machine: {e}")
@@ -122,6 +152,7 @@ def destroy(c):
     run_command(f"rm -rf {project_path}")
     print(f"Project directory {project_path} removed successfully.")
 
+
 @task
 def stop(c):
     """
@@ -130,6 +161,7 @@ def stop(c):
     machine_name = input("Enter the project name: ")
     load_env(machine_name)
     run_command(f"orb stop {os.environ.get('MACHINE_NAME')}")
+
 
 @task
 def list(c):
@@ -154,15 +186,18 @@ def list(c):
         else:
             print(f"Skipping non-existent project directory: {project_path}")
 
+
 namespace.add_task(generate_env)
 namespace.add_task(build)
 namespace.add_task(destroy)
 namespace.add_task(stop)
 namespace.add_task(list)
 
+
 def main():
     program = Program(namespace=namespace)
     program.run()
+
 
 if __name__ == "__main__":
     main()
