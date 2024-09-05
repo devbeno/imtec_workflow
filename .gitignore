@@ -1,0 +1,34 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Poetry files
+poetry.lock
+
+# Pytest cache
+.pytest_cache/
+.cache/
+
+# Environment variables
+.env
+.example-env
+
+# Logs and coverage reports
+*.log
+.coverage
+coverage.xml
+htmlcov/
+
+# Mac specific files
+.DS_Store
+
+# Backup files and temporary files
+*.swp
+*.swo
+*.bak
+*.tmp
+*.temp
+
+# IDE specific settings (VS Code)
+.vscode/
+.idea/

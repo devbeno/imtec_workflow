@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+
+# Setting up colors for echo commands
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+LIGHT_BLUE='\033[1;34m'
+NC='\033[0m' # No Color
+
+# Setting error handler
+handle_error() {
+    local line=$1
+    local exit_code=$?
+    echo -e "${RED}An error occurred on line $line with exit status $exit_code${NC}"
+    exit $exit_code
+}
+
+trap 'handle_error $LINENO' ERR
+set -e
+
+# Load environment variables
+source ~/.env
+
+# If .env doesn't exist or hasn't been loaded, make sure it's handled:
+if [ ! -f ~/.env ]; then
+    echo -e "${RED}Environment file not found, exiting.${NC}"
+    exit 1
+fi
+
+# Stream logs while the machine is being created
+echo -e "${LIGHT_BLUE}Streaming ORB machine creation logs...${NC}"
+while kill -0 $! 2>/dev/null; do
+    orb logs "$MACHINE_NAME" --all
+    sleep 2
+done
+
+# Step 1: Server Setup
+echo -e "${YELLOW}Setting timezone to $TIMEZONE...${NC}"
+sudo timedatectl set-timezone "$TIMEZONE"
+
+echo -e "${YELLOW}Updating and upgrading server packages...${NC}"
+sudo apt-get update -y && sudo apt-get upgrade -y
+
+# Step 2: Install Required Packages
+echo -e "${YELLOW}Installing required packages...${NC}"
+sudo apt install -y git python3-dev python3.10-dev python3-setuptools python3-pip python3-distutils python3.10-venv \
+software-properties-common mariadb-server mariadb-client redis-server xvfb libfontconfig wkhtmltopdf libmysqlclient-dev curl
+
+# Step 3: Configure MySQL Server
+echo -e "${YELLOW}Configuring MySQL server...${NC}"
+sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$MARIADB_ROOT_PASSWORD';"
+sudo mysql -u root -p"$MARIADB_ROOT_PASSWORD" -e "DELETE FROM mysql.user WHERE User='';"
+sudo mysql -u root -p"$MARIADB_ROOT_PASSWORD" -e "DROP DATABASE IF EXISTS test; DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';"
+sudo mysql -u root -p"$MARIADB_ROOT_PASSWORD" -e "FLUSH PRIVILEGES;"
+
+# Append MySQL configurations
+sudo bash -c 'cat <<EOL >> /etc/mysql/my.cnf
+[mysqld]
+character-set-client-handshake = FALSE
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+
+[mysql]
+default-character-set = utf8mb4
+EOL'
+
+sudo service mysql restart
+
+# Step 4: Install Node.js, npm, and yarn
+echo -e "${YELLOW}Installing Node.js, npm, and yarn...${NC}"
+curl https://raw.githubusercontent.com/creationix/nvm/master/install.sh | bash
+source ~/.profile
+nvm install 18
+sudo apt-get install -y npm
+sudo npm install -g yarn
+
+# Step 5: Install Frappe Bench
+echo -e "${YELLOW}Installing Frappe Bench...${NC}"
+sudo pip3 install frappe-bench
+bench --version
+bench init --frappe-branch version-15 frappe-bench
+cd frappe-bench/
+
+echo -e "${YELLOW}Setting permissions...${NC}"
+chmod -R o+rx /home/"$FRAPPE_USER"/
+
+# Step 6: Install ERPNext
+SITE_NAME="$MACHINE_NAME.orb.local"
+echo -e "${YELLOW}Creating a new site...${NC}"
+bench new-site "$SITE_NAME" --mariadb-root-password "$MARIADB_ROOT_PASSWORD" --admin-password "$ADMIN_PASSWORD"
+
+echo -e "${YELLOW}Downloading and installing ERPNext...${NC}"
+bench get-app --branch version-15 erpnext
+bench --site "$SITE_NAME" install-app erpnext
+
+# Step 7: Setup Production Server
+echo -e "${YELLOW}Setting up production server...${NC}"
+bench --site "$SITE_NAME" enable-scheduler
+sudo bench setup production "$FRAPPE_USER"
+bench setup nginx
+sudo service nginx reload
+sudo supervisorctl restart all
+
+echo -e "${GREEN}Frappe setup completed.${NC}"
+
+# Stream logs of the setup process
+echo -e "${LIGHT_BLUE}Streaming logs for the ORB machine...${NC}"
+while kill -0 $! 2>/dev/null; do
+    orb logs "$MACHINE_NAME" --all
+    sleep 2
+done
