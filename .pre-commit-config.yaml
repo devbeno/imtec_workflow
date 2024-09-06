@@ -14,17 +14,19 @@ repos:
         language_version: python3.10
         args: ["--line-length=110"]
 
-  # Optionally, run pytest as a local hook.
+  - repo: https://github.com/pre-commit/mirrors-isort
+    rev: v5.10.1
+    hooks:
+      - id: isort
+        args: ["--profile", "black"]
+
+  # Run pytest as a local hook using Poetry
   - repo: local
     hooks:
       - id: pytest-local
         name: pytest
-        entry: pytest
+        entry: poetry run pytest
         language: system
+        types: [python]
         args: ['--timeout=10']
         pass_filenames: false
-  - repo: https://github.com/pre-commit/mirrors-isort
-    rev: v5.10.1
-    hooks:
-    - id: isort
-      args: ["--profile", "black"]

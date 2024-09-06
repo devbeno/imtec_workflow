@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 
 # Poetry files
-poetry.lock
+# poetry.lock (consider removing this line to include poetry.lock)
 
 # Pytest cache
 .pytest_cache/
